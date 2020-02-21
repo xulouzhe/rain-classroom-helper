@@ -1,13 +1,11 @@
 // ==UserScript==
 // @name         Rain Classroom Helper
 // @namespace    https://raineggplant.com/
-// @version      0.2.0-beta
+// @version      0.2.3
 // @description  优化雨课堂使用体验
 // @author       RainEggplant
-
-// @match        *://www.yuketang.cn/web?index*
-// @match        *://pro.yuketang.cn/web?index*
-
+// @match        *://www.yuketang.cn/web*
+// @match        *://pro.yuketang.cn/web*
 // @grant        GM_addStyle
 // @require      https://cdn.bootcss.com/jquery/1.12.4/jquery.min.js
 // @updateURL    https://raw.githubusercontent.com/RainEggplant/rain-classroom-helper/master/rain-classroom-helper.user.js
@@ -35,6 +33,7 @@
       width: 32px !important;
     }
     .left .contact-us {
+      bottom: 10px !important;
       display: block !important;
     }
   `);
@@ -56,6 +55,9 @@
     .page-control {
       padding-top: 15px !important;
     }
+    .control-desc {
+      display: none !important;
+    }
     .page-nav {
       padding: unset !important;
       font-size: 18px !important;
@@ -69,12 +71,15 @@
     .contact-us {
       display: none;
     }
+    .right .control-panel .page-control .paging-number-list .page-no:nth-child(5n) {
+      margin: 0 14px 13px 0 !important;
+     }
   `);
 
   // 调整中间 iframe 为自适应宽度
   GM_addStyle(`
     .wrapper-inner {
-      width: 95% !important;
+      width: 92% !important;
     }
     .center {
       width: auto !important;
@@ -109,7 +114,6 @@
     #video-iframe {
       width: 320px;
       height: 304px;
-      margin-top: 20px;
     }
   `);
 
@@ -129,6 +133,74 @@
     `;
     $('ul.nav-list').append(liAbout);
   });
+
+  waitForKeyElements('div.left.fl', function () {
+    const divLeftHidden = `
+      <div id="left-hidden" class="fl" style="display: none;">
+        <p id="show-left" style="top: 50%; position: absolute; color: #fff; z-index: 1;">▶</p>
+      </div>
+    `;
+    $('div.left.fl').before(divLeftHidden);
+    $('#show-left').on('click', showLeftPanel);
+  });
+
+  // 添加控制样式的滑块
+  waitForKeyElements('div.panel.Absolute-Center', function () {
+    const panelWidthControls = `
+      <div style="margin-top: 20px; color: #fff; font-size: 14px;">
+        <p>
+          <label for="panel-width">右边栏宽度</label>
+          <input type="range" id="right-panel-width" value="320" min="200" max="576" style="width: 160px;">
+        </p>
+        <p>
+          <label for="panel-width">全屏占比</label>
+          <input type="range" id="content-width" value="92" min="50" max="98" style="width: 160px;">
+        </p>
+        <p>
+          <button id="hide-left" type="button" style="color: #000; font-size: 12px;">◀ 隐藏左边栏</button>
+        </p>
+      </div>
+    `;
+    $('div.panel.Absolute-Center').append(panelWidthControls);
+    $('#right-panel-width').on('change', setRightPanelWidth);
+    $('#content-width').on('change', setContentWidth);
+    $('#hide-left').on('click', hideLeftPanel);
+  });
+
+  function setRightPanelWidth() {
+    const width = 'width: ' + $(this).val() + 'px !important;';
+    const height = 'height: ' + (0.75 * $(this).val() + 60) + 'px !important;';
+    const marginLeft = 'margin-left: ' + $('div.center.fl').css('margin-left') + ';';
+    const marginRight = 'margin-right: ' + $(this).val() + 'px !important;';
+    const iframeDisplay = 'display: ' + $('#video-iframe').css('display') + ';';
+    $('div.right.fr').attr('style', width);
+    $('div.page-nav-control').attr('style', width);
+    $('div.center.fl').attr('style', marginLeft + ' ' + marginRight);
+    $('#video-iframe').attr('style', width + ' ' + height + ' ' + iframeDisplay);
+  }
+
+  function setContentWidth() {
+    const width = 'width: ' + $(this).val() + '% !important;';
+    $('div.wrapper-inner.clearfix.J_inner').attr('style', width);
+  }
+
+  function hideLeftPanel() {
+    const marginLeft = 'margin-left: 0px !important;';
+    const marginRight = 'margin-right: '
+      + $('div.center.fl').css('margin-right') + ' !important;';
+    $('div.left.fl').css('display', 'none');
+    $('div.center.fl').attr('style', marginLeft + ' ' + marginRight);
+    $('#left-hidden').css('display', 'block');
+  }
+
+  function showLeftPanel() {
+    const marginLeft = 'margin-left: 180px !important;';
+    const marginRight = 'margin-right: '
+      + $('div.center.fl').css('margin-right') + ' !important;';
+    $('div.left.fl').css('display', 'block');
+    $('div.center.fl').attr('style', marginLeft + ' ' + marginRight);
+    $('#left-hidden').css('display', 'none');
+  }
 
   waitForKeyElements('body', function () {
     // 中间 iframe 加载出内容后绑定处理视频的函数
@@ -168,6 +240,7 @@
         // 去除视频框中无关元素
         waitForKeyElements('.live__view', function () {
           const liveView = $('#video-iframe').contents().find('.live__view');
+          // liveView.children('section.live__wrap').css('padding-top', '0px');
           liveView.children(':not(.live__wrap)').remove();
           const observer = new MutationObserver(function (mutations) {
             mutations.forEach(function (mutation) {
@@ -196,6 +269,7 @@
 
     const config = { childList: true, subtree: true };
     iframeObserver.observe(iframeBody, config);
+    DEBUG && console.log('observation started');
 
     // 在 iframe 被重新加载（点击左侧导航栏、进入直播）时，重新添加 handler
     $('#rainiframe')[0].contentWindow.addEventListener('unload', () => {
@@ -204,6 +278,7 @@
       $('#video-iframe').css({ display: 'none' });
       const videoIFrame = $('#video-iframe')[0];
       videoIFrame.contentWindow.location.replace('about:blank');
+      $('#rainiframe').contents().empty();
       waitForKeyElements('body', function () {
         addVideoHandler();
       }, true, '#rainiframe');
